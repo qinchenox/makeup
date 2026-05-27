@@ -1,0 +1,16 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; }
+#root { min-height: 100vh; }
+
+.login-container {
+  display: flex; justify-content: center; align-items: center;
+  min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+.login-card {
+  width: 100%; max-width: 420px; padding: 40px;
+  background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+.login-card h1 {
+  text-align: center; margin-bottom: 8px; font-size: 1.5rem; color: #1a1a2e;
+}
+.login-card .subtitle { text-align: center; margin-bottom: 24px; color: #6b7280; font-size: 0.875rem; }

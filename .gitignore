@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+*.db
+server/storage/uploads/*
+server/storage/generated/*
+server/storage/temp/*
+!server/storage/uploads/.gitkeep
+!server/storage/generated/.gitkeep
+!server/storage/temp/.gitkeep
+.DS_Store
+Thumbs.db
+*.log
+package-lock.json

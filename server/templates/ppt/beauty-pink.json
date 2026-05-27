@@ -1,0 +1,13 @@
+{
+  "name": "beauty-pink",
+  "label": "美妆粉色风",
+  "primaryColor": "DB2777",
+  "secondaryColor": "FDF2F8",
+  "accentColor": "F472B6",
+  "fontFamily": "Microsoft YaHei",
+  "logoText": "Makeup Beauty",
+  "footerText": "化妆品数据安全智能体 - 内部资料",
+  "fontSize": { "title": 28, "subtitle": 16, "body": 14, "footnote": 10 },
+  "chartStyle": "modern",
+  "coverLayout": "centered"
+}

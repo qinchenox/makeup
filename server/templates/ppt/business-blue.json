@@ -1,0 +1,13 @@
+{
+  "name": "business-blue",
+  "label": "深蓝商务风",
+  "primaryColor": "1E3A5F",
+  "secondaryColor": "F0F4F8",
+  "accentColor": "3B82F6",
+  "fontFamily": "Microsoft YaHei",
+  "logoText": "Makeup Pro",
+  "footerText": "化妆品数据安全智能体 - 商业机密",
+  "fontSize": { "title": 30, "subtitle": 18, "body": 14, "footnote": 10 },
+  "chartStyle": "professional",
+  "coverLayout": "left-aligned"
+}

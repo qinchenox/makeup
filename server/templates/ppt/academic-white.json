@@ -1,0 +1,13 @@
+{
+  "name": "academic-white",
+  "label": "学术白皮书风",
+  "primaryColor": "374151",
+  "secondaryColor": "F9FAFB",
+  "accentColor": "6B7280",
+  "fontFamily": "SimSun",
+  "logoText": "Makeup Research",
+  "footerText": "化妆品数据安全智能体 - 学术参考",
+  "fontSize": { "title": 26, "subtitle": 16, "body": 12, "footnote": 9 },
+  "chartStyle": "minimal",
+  "coverLayout": "centered"
+}

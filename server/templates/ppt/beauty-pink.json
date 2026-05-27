@@ -9,5 +9,14 @@
   "footerText": "化妆品数据安全智能体 - 内部资料",
   "fontSize": { "title": 28, "subtitle": 16, "body": 14, "footnote": 10 },
   "chartStyle": "modern",
-  "coverLayout": "centered"
+  "coverLayout": "centered",
+  "components": {
+    "statCard": { "bgColor": "DB2777", "textColor": "FFFFFF", "radius": 12 },
+    "quoteBox": { "bgColor": "FDF2F8", "borderColor": "F472B6", "iconColor": "DB2777" },
+    "imageSlot": { "shadow": true, "radius": 12, "caption": true }
+  },
+  "gradients": {
+    "cover": { "type": "radial", "from": "EC4899", "to": "BE185D" },
+    "section": { "type": "linear", "from": "FDF2F8", "to": "FCE7F3" }
+  }
 }

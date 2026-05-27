@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu } from 'antd';
 import {
-  DashboardOutlined, DatabaseOutlined, FileTextOutlined,
+  DashboardOutlined, DatabaseOutlined, ThunderboltOutlined,
   HistoryOutlined, AuditOutlined, UserOutlined,
   SettingOutlined, ProfileOutlined,
 } from '@ant-design/icons';
@@ -17,7 +17,9 @@ export default function Sidebar({ collapsed }) {
   const items = [
     { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
     { key: '/datasources', icon: <DatabaseOutlined />, label: '数据源管理' },
-    { key: '/documents/generate', icon: <FileTextOutlined />, label: '文档生成' },
+    { key: '/kimi', icon: <ThunderboltOutlined />, label: 'AI 生成PPT (新)' },
+    { key: '/knowledge', icon: <DatabaseOutlined />, label: '知识库与生成' },
+    { key: '/convert', icon: <ThunderboltOutlined />, label: '快速转换' },
     { key: '/documents/history', icon: <HistoryOutlined />, label: '文档历史' },
     { key: '/audit', icon: <AuditOutlined />, label: '审计日志' },
     ...(user?.role === 'admin' ? [

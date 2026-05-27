@@ -9,5 +9,14 @@
   "footerText": "化妆品数据安全智能体 - 商业机密",
   "fontSize": { "title": 30, "subtitle": 18, "body": 14, "footnote": 10 },
   "chartStyle": "professional",
-  "coverLayout": "left-aligned"
+  "coverLayout": "left-aligned",
+  "components": {
+    "statCard": { "bgColor": "1E3A5F", "textColor": "FFFFFF", "radius": 8 },
+    "quoteBox": { "bgColor": "EFF6FF", "borderColor": "3B82F6", "iconColor": "1E3A5F" },
+    "imageSlot": { "shadow": true, "radius": 6, "caption": true }
+  },
+  "gradients": {
+    "cover": { "type": "linear", "from": "1E3A5F", "to": "1E40AF" },
+    "section": { "type": "linear", "from": "EFF6FF", "to": "F0F4F8" }
+  }
 }

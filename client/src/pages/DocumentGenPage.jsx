@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Typography, Card, Form, Input, Select, Button, Table, message, Space, Radio, Row, Col, Tag, Badge } from 'antd';
-import { FileTextOutlined, EyeOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Typography, Card, Form, Input, Button, Table, message, Space, Radio, Row, Col, Tag, Badge, Statistic } from 'antd';
+import { FileTextOutlined, EyeOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { documentApi } from '../api/document.api.js';
 import { datasourceApi } from '../api/datasource.api.js';
 
@@ -14,58 +14,96 @@ const TEMPLATES = [
 
 export default function DocumentGenPage() {
   const [form] = Form.useForm();
-  const [points, setPoints] = useState([]);
-  const [selectedPoints, setSelectedPoints] = useState([]);
+  const [sources, setSources] = useState([]);
+  const [loadingSources, setLoadingSources] = useState(false);
+  const [selectedSources, setSelectedSources] = useState([]);
+  const [sourceDetails, setSourceDetails] = useState({});
   const [loading, setLoading] = useState(false);
   const [docType, setDocType] = useState('pptx');
   const [template, setTemplate] = useState('business-blue');
-  const [preview, setPreview] = useState(null);
 
-  const fetchPoints = useCallback(async () => {
+  const fetchSources = useCallback(async () => {
+    setLoadingSources(true);
     try {
       const res = await datasourceApi.list({ limit: 100 });
-      const sources = res.data.data || [];
-      const allPoints = [];
-      for (const s of sources) {
-        try {
-          const detail = await datasourceApi.get(s.id);
-          (detail.data.data_points || []).forEach((p) => {
-            allPoints.push({ ...p, _sourceTitle: s.title, _trustLevel: s.trust_level, _sourceRefId: s.ref_id });
-          });
-        } catch (_) { /* skip */ }
-      }
-      setPoints(allPoints);
+      setSources(res.data.data || []);
     } catch (_) { /* ignore */ }
+    finally { setLoadingSources(false); }
   }, []);
 
-  useEffect(() => { fetchPoints(); }, [fetchPoints]);
-
-  const buildPreview = () => {
-    const selected = points.filter((p) => selectedPoints.includes(p.id));
-    const bySource = {};
-    selected.forEach((p) => {
-      const key = p._sourceTitle || '未分类';
-      if (!bySource[key]) bySource[key] = [];
-      bySource[key].push(p);
-    });
-    setPreview({ total: selected.length, bySource });
+  // Load source details on demand when selection changes
+  const loadSourceDetail = async (sourceId) => {
+    if (sourceDetails[sourceId]) return;
+    try {
+      const detail = await datasourceApi.get(sourceId);
+      setSourceDetails(prev => ({ ...prev, [sourceId]: detail.data }));
+    } catch (err) {
+      message.error('加载数据源详情失败: ' + (err.response?.data?.error || err.message));
+    }
   };
+
+  const handleSourceSelect = (selectedKeys) => {
+    setSelectedSources(selectedKeys);
+    // Load details for newly selected sources
+    for (const key of selectedKeys) {
+      loadSourceDetail(key);
+    }
+  };
+
+  useEffect(() => { fetchSources(); }, [fetchSources]);
+
+  // Calculate total data points from selected sources
+  const totalPoints = selectedSources.reduce((sum, sid) => {
+    const detail = sourceDetails[sid];
+    return sum + (detail?.data_points?.length || 0);
+  }, 0);
+
+  const totalInsights = selectedSources.reduce((sum, sid) => {
+    const detail = sourceDetails[sid];
+    return sum + (detail?.analysis?.insights?.length || 0);
+  }, 0);
 
   const handleGenerate = async () => {
     const values = await form.validateFields();
-    if (!selectedPoints.length) { message.error('请选择至少一个数据点'); return; }
+    if (!selectedSources.length) { message.error('请选择至少一个知识库数据源'); return; }
     setLoading(true);
     try {
+      // Load details for selected sources into local cache
+      const detailsMap = { ...sourceDetails };
+      for (const sid of selectedSources) {
+        if (!detailsMap[sid]) {
+          try {
+            const detail = await datasourceApi.get(sid);
+            detailsMap[sid] = detail.data;
+          } catch (err) {
+            message.error('加载数据源失败: ' + (err.response?.data?.error || err.message));
+            setLoading(false);
+            return;
+          }
+        }
+      }
+      // Update state cache
+      setSourceDetails(detailsMap);
+
+      // Collect all data point IDs from selected sources
+      const allPointIds = [];
+      for (const sid of selectedSources) {
+        const detail = detailsMap[sid];
+        if (detail?.data_points?.length) {
+          allPointIds.push(...detail.data_points.map(p => p.id));
+        }
+      }
+      if (!allPointIds.length) { message.error('所选知识库中没有数据点，请先在数据源管理中上传文件'); setLoading(false); return; }
+
       const res = await documentApi.generate({
         title: values.title,
         doc_type: docType,
         instruction: values.instruction || '',
-        data_point_ids: selectedPoints,
+        data_point_ids: allPointIds,
         template_name: template,
         author_name: values.author || '',
       });
-      message.success(`生成成功！${res.data.data_points_count} 个数据点已注入到${docType.toUpperCase()}`);
-      setPreview(null);
+      message.success(`${docType.toUpperCase()} 生成成功！${res.data.data_points_count} 个数据点已注入`);
     } catch (err) {
       message.error(err.response?.data?.error || '生成失败');
     } finally {
@@ -73,16 +111,39 @@ export default function DocumentGenPage() {
     }
   };
 
-  const pointColumns = [
-    { title: '标签', dataIndex: 'label', key: 'label', ellipsis: true },
-    { title: '值', dataIndex: 'value', key: 'value', width: 100 },
-    { title: '来源', dataIndex: '_sourceTitle', key: '_sourceTitle', ellipsis: true, width: 160 },
-    { title: 'REF-ID', dataIndex: 'ref_id', key: 'ref_id', width: 130 },
+  const sourceColumns = [
     {
-      title: '可信度', dataIndex: '_trustLevel', key: '_trustLevel', width: 80,
+      title: '知识库数据源', dataIndex: 'title', key: 'title', ellipsis: true,
+      render: (v, r) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{v}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {sourceDetails[r.id]?.data_points?.length || '...'} 个数据点
+            {sourceDetails[r.id]?.analysis?.insights?.length ? ` · ${sourceDetails[r.id].analysis.insights.length} 个洞察` : ''}
+          </Text>
+        </Space>
+      ),
+    },
+    {
+      title: '分类', dataIndex: 'category', key: 'category', width: 100,
+      render: (v) => <Tag>{v}</Tag>,
+    },
+    {
+      title: '可信度', dataIndex: 'trust_level', key: 'trust_level', width: 100,
       render: (v) => {
         const colors = { '内部资料': 'blue', '行业公开': 'green', '用户提供': 'orange' };
         return <Tag color={colors[v] || 'default'}>{v}</Tag>;
+      },
+    },
+    {
+      title: '类型', dataIndex: 'file_type', key: 'file_type', width: 70,
+      render: (v) => v ? <Tag>{v.toUpperCase()}</Tag> : '-',
+    },
+    {
+      title: '关键词', key: 'keywords', width: 200, ellipsis: true,
+      render: (_, r) => {
+        const kw = sourceDetails[r.id]?.analysis?.insights?.find(i => i.type === 'keywords');
+        return kw ? kw.keywords?.slice(0, 5).map((k, i) => <Tag key={i} color="purple" style={{ fontSize: 11 }}>{k}</Tag>) : '-';
       },
     },
   ];
@@ -91,14 +152,19 @@ export default function DocumentGenPage() {
     <div>
       <Title level={4}>文档生成</Title>
       <Row gutter={16}>
-        <Col span={11}>
-          <Card title="数据点库" size="small" extra={<Button size="small" onClick={fetchPoints}>刷新</Button>}>
-            <Table rowKey="id" columns={pointColumns} dataSource={points} size="small"
-              rowSelection={{ selectedRowKeys: selectedPoints, onChange: setSelectedPoints }}
-              pagination={{ pageSize: 8 }} scroll={{ y: 380 }} />
+        <Col span={12}>
+          <Card title={<span><DatabaseOutlined /> 选择知识库</span>} size="small"
+            extra={<Button size="small" onClick={fetchSources} loading={loadingSources}>刷新</Button>}>
+            <Table rowKey="id" columns={sourceColumns} dataSource={sources} size="small"
+              rowSelection={{
+                selectedRowKeys: selectedSources,
+                onChange: handleSourceSelect,
+              }}
+              pagination={{ pageSize: 8 }} scroll={{ y: 380 }}
+              locale={{ emptyText: '暂无数据源，请先在「数据源管理」中上传' }} />
           </Card>
         </Col>
-        <Col span={13}>
+        <Col span={12}>
           <Card title="生成配置">
             <Form form={form} layout="vertical" size="middle">
               <Form.Item name="title" label="文档标题" rules={[{ required: true }]}>
@@ -109,8 +175,8 @@ export default function DocumentGenPage() {
               </Form.Item>
               <Form.Item label="文档类型">
                 <Radio.Group value={docType} onChange={(e) => setDocType(e.target.value)}>
-                  <Radio.Button value="pptx">PPTX</Radio.Button>
-                  <Radio.Button value="docx">DOCX</Radio.Button>
+                  <Radio.Button value="pptx">PPTX 演示文稿</Radio.Button>
+                  <Radio.Button value="docx">DOCX Word文档</Radio.Button>
                 </Radio.Group>
               </Form.Item>
               <Form.Item label="模板">
@@ -123,33 +189,36 @@ export default function DocumentGenPage() {
                 </Radio.Group>
               </Form.Item>
               <Form.Item name="instruction" label="生成指令">
-                <Input.TextArea rows={2} placeholder="描述文档结构和重点，例如：对比各产品投诉率，生成饼图" />
-              </Form.Item>
-              <Form.Item>
-                <Space>
-                  <Button type="primary" icon={<FileTextOutlined />} onClick={handleGenerate} loading={loading}>
-                    生成 {docType.toUpperCase()}
-                  </Button>
-                  <Button icon={<EyeOutlined />} onClick={buildPreview} disabled={!selectedPoints.length}>
-                    预览结构
-                  </Button>
-                  <Text type="secondary">{selectedPoints.length} 个数据点已选</Text>
-                </Space>
+                <Input.TextArea rows={2} placeholder="描述文档重点，例如：对比各产品投诉率，生成饼图" />
               </Form.Item>
             </Form>
-          </Card>
-          {preview && (
-            <Card title="文档结构预览" size="small" style={{ marginTop: 16 }}>
-              <Text>共 {preview.total} 个数据点，{Object.keys(preview.bySource).length} 个章节</Text>
-              {Object.entries(preview.bySource).map(([src, pts]) => (
-                <Card key={src} size="small" style={{ marginTop: 8 }} title={src}>
-                  {pts.map((p) => (
-                    <Tag key={p.id} style={{ marginBottom: 4 }}>{p.label}: {p.value}{p.unit || ''}</Tag>
-                  ))}
+
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col span={8}>
+                <Card size="small">
+                  <Statistic title="已选知识库" value={selectedSources.length} suffix="个" />
                 </Card>
-              ))}
-            </Card>
-          )}
+              </Col>
+              <Col span={8}>
+                <Card size="small">
+                  <Statistic title="数据点" value={totalPoints} suffix="条" />
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card size="small">
+                  <Statistic title="洞察" value={totalInsights} suffix="项" />
+                </Card>
+              </Col>
+            </Row>
+
+            <Button type="primary" icon={<FileTextOutlined />} onClick={handleGenerate} loading={loading} block size="large"
+              disabled={!selectedSources.length}>
+              生成 {docType.toUpperCase()} 文档
+            </Button>
+            <Text type="secondary" style={{ display: 'block', textAlign: 'center', marginTop: 8 }}>
+              系统将自动关联所选知识库的全部数据点，注入溯源链接
+            </Text>
+          </Card>
         </Col>
       </Row>
     </div>

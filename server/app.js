@@ -5,7 +5,7 @@ const session = require('express-session');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
-const { initDatabase } = require('./config/database.js');
+const { initSupabase } = require('./config/database.js');
 const { mountRoutes } = require('./routes/index.js');
 const { errorHandler } = require('./middleware/errorHandler.js');
 
@@ -13,16 +13,17 @@ function createApp(options) {
   const opts = options || {};
   const app = express();
 
-  // Database
-  const dbPath = opts.dbPath || path.join(__dirname, 'database', 'makeup.db');
-  const db = initDatabase(dbPath);
-  app.locals.db = db;
+  // Express 5 default body limit is 100KB — bump to 500MB
+  app.set('maxRequestBodySize', 500 * 1024 * 1024);
+
+  // Initialize Supabase
+  initSupabase();
 
   // Middleware stack
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: true, credentials: true }));
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: '500mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '500mb' }));
 
   // Session
   const sessionSecret = process.env.SESSION_SECRET || 'makeup-dev-secret-change-in-production';
@@ -38,8 +39,19 @@ function createApp(options) {
     },
   }));
 
+  // Multer error handling
+  app.use((err, req, res, next) => {
+    if (err && err.message && err.message.includes('File too large')) {
+      return res.status(413).json({ error: '文件过大，最大支持500MB' });
+    }
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: '文件过大，最大支持500MB' });
+    }
+    next(err);
+  });
+
   // Routes
-  app.use(mountRoutes(db));
+  app.use(mountRoutes());
 
   // Serve static client build in production
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
@@ -53,7 +65,7 @@ function createApp(options) {
   // Error handler
   app.use(errorHandler);
 
-  return { app, db };
+  return { app };
 }
 
 module.exports = { createApp };

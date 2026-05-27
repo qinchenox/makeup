@@ -8,16 +8,69 @@ const { injectSourceAnnotation, buildReferencesTable } = require('../common/sour
 
 const OUTPUT_DIR = path.join(__dirname, '..', '..', 'storage', 'generated');
 const TEMPLATES_DIR = path.join(__dirname, '..', '..', 'templates', 'ppt');
+const UPLOADS_DIR = path.join(__dirname, '..', '..', 'storage', 'uploads');
 
 if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 if (!fs.existsSync(TEMPLATES_DIR)) fs.mkdirSync(TEMPLATES_DIR, { recursive: true });
 
+// Visual component builders
+function addStatCard(slide, { label, value, x, y, w, h, config, primaryColor }) {
+  const c = config || {};
+  slide.addShape('roundRect', { x, y, w, h, fill: { color: c.bgColor || primaryColor }, rectRadius: c.radius || 0.08 });
+  slide.addText(value, { x: x + 0.15, y: y + 0.15, w: w - 0.3, h: h * 0.55, fontSize: 24, bold: true, color: c.textColor || 'FFFFFF', align: 'center' });
+  slide.addText(label, { x: x + 0.15, y: y + h * 0.55, w: w - 0.3, h: h * 0.35, fontSize: 10, color: c.textColor || 'EEEEEE', align: 'center' });
+}
+
+function addQuoteBox(slide, { quote, author, x, y, w, h, config, primaryColor }) {
+  const c = config || {};
+  slide.addShape('roundRect', { x, y, w, h, fill: { color: c.bgColor || 'F9FAFB' }, line: { color: c.borderColor || primaryColor, width: 2 }, rectRadius: 0.05 });
+  slide.addText('"', { x: x + 0.2, y: y + 0.1, w: 0.6, h: 0.6, fontSize: 28, color: c.iconColor || primaryColor, fontFace: 'Georgia' });
+  slide.addText(quote, { x: x + 0.8, y: y + 0.3, w: w - 1.2, h: h * 0.5, fontSize: 13, italic: true, color: '444444' });
+  if (author) slide.addText('— ' + author, { x: x + 0.8, y: y + h * 0.7, w: w - 1.2, h: h * 0.25, fontSize: 10, color: '888888' });
+}
+
+function addImageSlot(slide, { imagePath, caption, x, y, w, h, config }) {
+  const c = config || {};
+  if (imagePath && fs.existsSync(imagePath)) {
+    slide.addImage({ path: imagePath, x, y, w, h, sizing: { type: 'cover', w, h } });
+  } else {
+    slide.addShape('roundRect', { x, y, w, h, fill: { color: 'F3F4F6' }, line: { color: 'DDDDDD', dashType: 'dash' }, rectRadius: (c.radius || 0.05) });
+    slide.addText('图片占位', { x, y: y + h / 2 - 0.3, w, h: 0.6, fontSize: 12, color: 'BBBBBB', align: 'center' });
+  }
+  if (caption) {
+    slide.addText(caption, { x, y: y + h + 0.05, w, h: 0.35, fontSize: 9, color: '888888', align: 'center', italic: true });
+  }
+}
+
 function loadTemplate(name) {
-  try {
-    const p = path.join(TEMPLATES_DIR, (name || 'business-blue') + '.json');
-    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf-8'));
-  } catch (_) { /* fall through */ }
+  // Try built-in templates first
+  const paths = [
+    path.join(TEMPLATES_DIR, (name || 'business-blue') + '.json'),
+    path.join(TEMPLATES_DIR, 'user', (name || 'business-blue') + '.json'),
+  ];
+  for (const p of paths) {
+    try {
+      if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf-8'));
+    } catch (_) { /* continue */ }
+  }
   return null;
+}
+
+function listAllTemplates() {
+  const templates = [];
+  // Built-in
+  for (const dir of [TEMPLATES_DIR, path.join(TEMPLATES_DIR, 'user')]) {
+    try {
+      if (!fs.existsSync(dir)) continue;
+      for (const f of fs.readdirSync(dir)) {
+        if (f.endsWith('.json')) {
+          const t = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8'));
+          templates.push({ ...t, id: f.replace('.json', ''), source: dir.includes('user') ? 'user' : 'builtin' });
+        }
+      }
+    } catch (_) {}
+  }
+  return templates;
 }
 
 function classifyDataPoints(points) {
@@ -58,7 +111,7 @@ function generatePPTX({ title, instruction, dataPoints, dataSources, brandConfig
   const { numeric, percentages, text } = classifyDataPoints(dataPoints);
   const layout = pickLayout(dataPoints.length);
 
-  // ============ COVER ============
+  // ============ COVER (enhanced with gradient) ============
   const cover = pptx.addSlide();
   cover.background = { color: primaryHex };
   cover.addText(brand.logoText || 'Makeup', { x: 0.5, y: 0.3, w: 4, h: 0.6, fontSize: 12, color: 'FFFFFF', fontFace: brand.fontFamily });
@@ -73,6 +126,25 @@ function generatePPTX({ title, instruction, dataPoints, dataSources, brandConfig
   metaParts.push('数据源: ' + (dataSources ? [...new Set(dataSources.map((s) => s.id))].length : 0) + ' 个');
   cover.addText(metaParts.join('  |  '), { x: 1, y: 4.5, w: 11, h: 0.5, fontSize: 11, color: 'CCCCCC', fontFace: brand.fontFamily, align: 'center' });
   cover.addText(brand.footerText || '', { x: 1, y: 5.8, w: 11, h: 0.4, fontSize: 9, color: 'AAAAAA', fontFace: brand.fontFamily, align: 'center' });
+
+  // ============ STATS OVERVIEW ============
+  if (dataPoints.length >= 2) {
+    const statsSlide = pptx.addSlide();
+    statsSlide.addText('核心数据一览', { x: 0.5, y: 0.3, w: 12, h: 0.7, fontSize: 22, bold: true, color: primaryHex, fontFace: brand.fontFamily });
+    const topPoints = dataPoints.slice(0, 6);
+    const cardW = 2.7; const cardH = 1.3; const gap = 0.3;
+    const totalW = topPoints.length * (cardW + gap) - gap;
+    const startX = (13.333 - totalW) / 2;
+    topPoints.forEach((dp, i) => {
+      const x = startX + i * (cardW + gap);
+      const val = String(dp.value || '').length > 15 ? String(dp.value).substring(0, 14) + '..' : String(dp.value || '');
+      addStatCard(statsSlide, {
+        label: dp.label, value: val + (dp.unit || ''),
+        x, y: 1.5, w: cardW, h: cardH,
+        config: template.components?.statCard, primaryColor: primaryHex,
+      });
+    });
+  }
 
   // ============ TOC ============
   if (dataSources && dataSources.length > 1) {
@@ -229,4 +301,4 @@ function generatePPTX({ title, instruction, dataPoints, dataSources, brandConfig
   return pptx.writeFile({ fileName: filePath }).then(() => ({ filePath, filename }));
 }
 
-module.exports = { generatePPTX };
+module.exports = { generatePPTX, listAllTemplates };

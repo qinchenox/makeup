@@ -1,22 +1,26 @@
 'use strict';
 
-const path = require('path');
-const fs = require('fs');
-const Database = require('better-sqlite3');
+const { createClient } = require('@supabase/supabase-js');
 
-function initDatabase(dbPath) {
-  const resolved = dbPath || path.join(__dirname, 'makeup.db');
-  const dir = path.dirname(resolved);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+let supabase = null;
 
-  const db = new Database(resolved);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+function initSupabase() {
+  if (supabase) return supabase;
 
-  const schema = fs.readFileSync(path.join(__dirname, '..', 'database', 'schema.sql'), 'utf-8');
-  db.exec(schema);
+  const url = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
+  const key = process.env.SUPABASE_ANON_KEY || 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH';
 
-  return db;
+  supabase = createClient(url, key, {
+    db: { schema: 'public' },
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  return supabase;
 }
 
-module.exports = { initDatabase };
+function getDb() {
+  if (!supabase) initSupabase();
+  return supabase;
+}
+
+module.exports = { initSupabase, getDb };
